@@ -123,16 +123,18 @@ void *consumer_routine(void *data) {
 int main(int argv, const char *argc[]) {
 
 	// Get our argument parameters
-	if (argv < 2) {
-		printf("Invalid parameters. Format: %s <max_items>\n", argc[0]);
+	if (argv < 4) {
+		printf("Invalid parameters. Format: %s <buffer_size> <num_consumers> <max_items>\n", argc[0]);
 		exit(0);
 	}
 
 	// User input on the size of the buffer
-	int num_produce = (unsigned int) strtol(argc[1], NULL, 10);
+	int num_produce = (unsigned int) strtol(argc[3], NULL, 10);
+	int buffer_size = (unsigned int) strtol(argc[1], NULL, 10);
+	int num_consume = (unsigned int) strtol(argc[2], NULL, 10);
 
 
-	printf("Producing %d today.\n", num_produce);
+	printf("Producing %d Yodas today with a shelf size of %d for %d consumers.\n", num_produce, buffer_size, num_consume);
 	
 	// Initialize our semaphores
 	empty = new Semaphore(0);
@@ -147,7 +149,7 @@ int main(int argv, const char *argc[]) {
 	pthread_create(&producer, NULL, producer_routine, (void *) &num_produce);
 
 	// Launch our consumer thread
-	pthread_create(&consumer, NULL, consumer_routine, NULL);
+	pthread_create(&consumer, NULL, consumer_routine, (void *) &num_consume);
 
 	// Wait for our producer thread to finish up
 	pthread_join(producer, NULL);
