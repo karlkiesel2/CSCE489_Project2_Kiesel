@@ -17,9 +17,20 @@ Semaphore *full = NULL;
 
 pthread_mutex_t buf_mutex;
 
-int buffer = 0;
+// Circular buffer to hold the items produced. We define the size based on user input
+int *buffer = NULL;
+// Size of buffer initially set at zero, but will be set to user input in main
+int buffer_size = 0;
+// Number of consumers that will be created based on user input
+int num_consumers = 0;
+// Keep track of how many items have been consumed
 int consumed = 0;
-
+// Number of items to produce, set by user input
+int num_produce = 0;
+// Index for the next item to produce
+int in = 0;
+// Index for the next item to consume
+int out = 0;
 
 /*************************************************************************************
  * producer_routine - this function is called when the producer thread is created.
@@ -31,19 +42,21 @@ int consumed = 0;
  *
  *************************************************************************************/
 
-void *producer_routine(void *data) {
+void *producer_routine(void *data)
+{
 
 	time_t rand_seed;
-	srand((unsigned int) time(&rand_seed));
+	srand((unsigned int)time(&rand_seed));
 
 	// The current serial number (incremented)
 	unsigned int serialnum = 1;
-	
+
 	// We know the data pointer is an integer that indicates the number to produce
-	int left_to_produce = *((int *) data);
+	int left_to_produce = *((int *)data);
 
 	// Loop through the amount we're going to produce and place into the buffer
-	while (left_to_produce > 0) {
+	while (left_to_produce > 0)
+	{
 		printf("Producer wants to put Yoda #%d into buffer...\n", serialnum);
 
 		// Semaphore check to make sure there is an available slot
@@ -52,24 +65,44 @@ void *producer_routine(void *data) {
 		// Place item on the next shelf slot by first setting the mutex to protect our buffer vars
 		pthread_mutex_lock(&buf_mutex);
 
-		buffer = serialnum;
+		// Place the Yoda in the buffer at the current index
+		buffer[in] = serialnum;
+		printf("   Producer put Yoda #%d on shelf in slot #%d.\n", serialnum, in);
+		// Increment the index and wrap around if we reach the end of the buffer
+		in = (in + 1) % buffer_size;
+		// Increment the serial number for the next Yoda
 		serialnum++;
+		// Decrement the number of Yodas left to produce
 		left_to_produce--;
 
+		// Unlock the mutex to allow other threads to access the buffer
 		pthread_mutex_unlock(&buf_mutex);
-		
-		printf("   Yoda put on shelf.\n");
-		
-		// Semaphore signal that there are items available
+
+		// Semaphore signal that there are items available, and waiting consumers can now consume
 		empty->signal();
 
 		// random sleep but he makes them fast so 1/20 of a second
-		usleep((useconds_t) (rand() % 200000));
-	
+		usleep((useconds_t)(rand() % 200000));
 	}
+
+	// After all items have been produced, we need to signal waiting consumers to exit
+	for (int i = 0; i < num_consumers; i++)
+	{
+		// Send signal to consumers that we are done producing. Same logic as above, but we place a value of -1 in the buffer
+		// to indicate that no more items will be produced and consumers should exit
+		printf("Producer signals consumer to exit.\n");
+		full->wait();
+		printf("Producer places poison pill for consumer #%d.\n", i + 1);
+		pthread_mutex_lock(&buf_mutex);
+		// Write -1 to the buffer to indicate no more items will be produced and consumers should exit
+		buffer[in] = -1;
+		in = (in + 1) % buffer_size;
+		pthread_mutex_unlock(&buf_mutex);
+		empty->signal();
+	}
+
 	return NULL;
 }
-
 
 /*************************************************************************************
  * consumer_routine - this function is called when the consumer thread is created.
@@ -81,64 +114,96 @@ void *producer_routine(void *data) {
  *
  *************************************************************************************/
 
-void *consumer_routine(void *data) {
-	(void) data;
+void *consumer_routine(void *data)
+{
+	// We know the data pointer is an integer that indicates the number of consumers
+	unsigned int num_consumers = *((unsigned int *)data);
 
-	bool quitthreads = false;
+	// Consumers will continue until all items are consumed
+	while (consumed < num_produce)
+	{
 
-	while (!quitthreads) {
 		printf("Consumer wants to buy a Yoda...\n");
 
 		// Semaphore to see if there are any items to take
 		empty->wait();
 
-		// Take an item off the shelf
+		// Lock the mutex to safely access the buffer
 		pthread_mutex_lock(&buf_mutex);
-	
-		printf("   Consumer bought Yoda #%d.\n", buffer);
-		buffer = 0;
-		consumed++;
-	
+
+		// Grab the item from the buffer at the current index
+		int item = buffer[out];
+
+		// If the item is -1, it means the producer has signaled that no more items will be produced, so consumer should exit
+		if (item == -1)
+		{
+			// Signal for exit
+			pthread_mutex_unlock(&buf_mutex);
+			full->signal();
+			break;
+		}
+		// If we reach here, we have a valid item to consume
+		// Make sure the buffer slot is not empty
+		else if (item != 0)
+		{
+			printf("   Consumer bought Yoda #%d from shelf slot #%d.\n", item, out);
+			// Mark slot as empty
+			buffer[out] = 0;
+			// Increment the out index and wrap around if we reach the end of the buffer
+			out = (out + 1) % buffer_size;
+			// Increment the count of consumed items
+			consumed++;
+		}
+
+		// Unlock the mutex to allow other threads to access the buffer
 		pthread_mutex_unlock(&buf_mutex);
 
-		// Consumers wait up to one second
-		usleep((useconds_t) (rand() % 1000000));
+		// Consumers wait up to one second BEFORE signaling that they have taken an item
+		usleep((useconds_t)(rand() % 1000000));
 
+		// Signal that an item has been consumed, and waiting producers can now produce again
 		full->signal();
+
+		// Yoda is taken off shelf, now shelf space is available
+		sleep(1);
 	}
+	// After consuming all items, consumer(s) goes home
 	printf("Consumer goes home.\n");
 
-	return NULL;	
+	return NULL;
 }
 
-
 /*************************************************************************************
- * main - Standard C main function for our storefront. 
+ * main - Standard C main function for our storefront.
  *
- *		Expected params: pctest <num_consumers> <max_items>
+ *		Expected params: pctest <buffer_size> <num_consumers> <max_items>
  *				max_items - how many items will be produced before the shopkeeper closes
  *
  *************************************************************************************/
 
-int main(int argv, const char *argc[]) {
+int main(int argv, const char *argc[])
+{
 
 	// Get our argument parameters
-	if (argv < 4) {
+	if (argv != 4)
+	{
 		printf("Invalid parameters. Format: %s <buffer_size> <num_consumers> <max_items>\n", argc[0]);
 		exit(0);
 	}
 
 	// User input on the size of the buffer
-	int num_produce = (unsigned int) strtol(argc[3], NULL, 10);
-	int buffer_size = (unsigned int) strtol(argc[1], NULL, 10);
-	int num_consume = (unsigned int) strtol(argc[2], NULL, 10);
+	num_produce = (unsigned int)strtol(argc[3], NULL, 10);
+	buffer_size = (unsigned int)strtol(argc[1], NULL, 10);
+	num_consumers = (unsigned int)strtol(argc[2], NULL, 10);
 
+	// Allocate buffer (shelf) size based on user input
+	buffer = new int[buffer_size];
 
-	printf("Producing %d Yodas today with a shelf size of %d for %d consumers.\n", num_produce, buffer_size, num_consume);
-	
+	printf("Producing %d Yodas today with a shelf size of %d for %d consumers.\n", num_produce, buffer_size, num_consumers);
+
 	// Initialize our semaphores
 	empty = new Semaphore(0);
-	full = new Semaphore(1);
+	full = new Semaphore(buffer_size);
 
 	pthread_mutex_init(&buf_mutex, NULL); // Initialize our buffer mutex
 
@@ -146,10 +211,10 @@ int main(int argv, const char *argc[]) {
 	pthread_t consumer;
 
 	// Launch our producer thread
-	pthread_create(&producer, NULL, producer_routine, (void *) &num_produce);
+	pthread_create(&producer, NULL, producer_routine, (void *)&num_produce);
 
 	// Launch our consumer thread
-	pthread_create(&consumer, NULL, consumer_routine, (void *) &num_consume);
+	pthread_create(&consumer, NULL, consumer_routine, (void *)&num_consumers);
 
 	// Wait for our producer thread to finish up
 	pthread_join(producer, NULL);
@@ -163,14 +228,16 @@ int main(int argv, const char *argc[]) {
 		sleep(1);
 
 	// Now make sure they all exited
-//	for (unsigned int i=0; i<NUM_CONSUMERS; i++) {
-//		pthread_join(consumers[i], NULL);
-//	}
+	for (int i = 0; i < num_consumers; i++)
+	{
+		pthread_join(consumer, NULL);
+	}
 
-	// We are exiting, clean up
+	// We are exiting, clean up all dynamic memory
 	delete empty;
-	delete full;		
+	delete full;
+	pthread_mutex_destroy(&buf_mutex);
+	delete[] buffer;
 
 	printf("Producer/Consumer simulation complete!\n");
-
 }
