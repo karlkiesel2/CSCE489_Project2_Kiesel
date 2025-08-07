@@ -1,3 +1,8 @@
+/*
+ * Lt Karl Kiesel
+ * CSCE 489 Project 2
+ * Semaphore.cpp - implementation of the Semaphore class 
+ */
 #include <pthread.h>
 #include "Semaphore.h"
 
