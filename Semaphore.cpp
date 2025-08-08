@@ -1,11 +1,10 @@
 /*
  * Lt Karl Kiesel
  * CSCE 489 Project 2
- * Semaphore.cpp - implementation of the Semaphore class 
+ * Semaphore.cpp - implementation of the Semaphore class
  */
 #include <pthread.h>
 #include "Semaphore.h"
-
 
 /*************************************************************************************
  * Semaphore (constructor) - this should take count and place it into a local variable.
@@ -15,16 +14,15 @@
  *
  *************************************************************************************/
 
-Semaphore::Semaphore(int count) {
+Semaphore::Semaphore(int count)
+{
     // Save the starting count to a local variable
     this->count = count;
     // Initialize the mutex and condition variable
     // Resources are allocated for the mutex and condition variable, so we need to destroy them in the destructor
     pthread_mutex_init(&mutex, NULL);
     pthread_cond_init(&cond, NULL);
-
 }
-
 
 /*************************************************************************************
  * ~Semaphore (destructor) - called when the class is destroyed. Clean up any dynamic
@@ -32,44 +30,45 @@ Semaphore::Semaphore(int count) {
  *
  *************************************************************************************/
 
-Semaphore::~Semaphore() {
+Semaphore::~Semaphore()
+{
     // Destroy the mutex and condition variable
     pthread_mutex_destroy(&mutex);
     pthread_cond_destroy(&cond);
 }
-
 
 /*************************************************************************************
  * wait - implement a standard wait Semaphore method here
  *
  *************************************************************************************/
 
-void Semaphore::wait() {
+void Semaphore::wait()
+{
     // Lock the mutex to ensure multiple threads do not modify the count simultaneously
     pthread_mutex_lock(&mutex);
 
     // If the count is zero or less, wait for a signal
     // Otherwise, allow the thread to proceed and decrement the count
-    while (count <= 0) {
+    while (count <= 0)
+    {
         // Wait on the condition variable, releasing the mutex while waiting
         pthread_cond_wait(&cond, &mutex);
     }
 
-    // Decrement the semaphore count 
+    // Decrement the semaphore count
     count--;
 
     // Unlock the mutex after editing the count
     pthread_mutex_unlock(&mutex);
-
 }
-
 
 /*************************************************************************************
  * signal - implement a standard signal Semaphore method here
  *
  *************************************************************************************/
 
- void Semaphore::signal() {
+void Semaphore::signal()
+{
     // Lock the mutex to ensure multiple threads do not modify the count simultaneously
     pthread_mutex_lock(&mutex);
 
@@ -81,7 +80,4 @@ void Semaphore::wait() {
 
     // Unlock the mutex after editing the count and signaling waiting threads
     pthread_mutex_unlock(&mutex);
-
 }
-
-

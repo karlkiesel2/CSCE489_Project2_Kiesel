@@ -1,15 +1,14 @@
 /*
  * Lt Karl Kiesel
  * CSCE 489 Project 2
- * Semaphore.h - implementation of the Semaphore class 
+ * Semaphore.h - implementation of the Semaphore class
  */
 #ifndef SEMAPHORE_H
 #define SEMAPHORE_H
 
-class Semaphore 
+class Semaphore
 {
 public:
-
 	Semaphore(int count);
 	~Semaphore();
 
