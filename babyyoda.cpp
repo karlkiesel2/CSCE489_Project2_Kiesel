@@ -90,18 +90,11 @@ void *producer_routine(void *data)
 		usleep((useconds_t)(rand() % 200000));
 	}
 
-	printf("Producer has finished producing Yodas for the day. Notifying consumers to stop waiting\n");
+	printf("Producer has finished producing Yodas for the day. Notifying remaining consumers to stop waiting\n");
 	// After all items have been produced, we need to signal waiting consumers to exit
 	for (int i = 0; i < num_consumers; i++)
 	{
-		// Send signal to consumers that we are done producing. Same logic as above, but we place a value of -1 in the buffer
-		// to indicate that no more items will be produced and consumers should exit
-		full->wait();
-		pthread_mutex_lock(&buf_mutex);
-		// Write -1 to the buffer to indicate no more items will be produced and consumers should exit
-		buffer[in] = -1;
-		in = (in + 1) % buffer_size;
-		pthread_mutex_unlock(&buf_mutex);
+		// // Send signal to consumers that we are done producing.
 		empty->signal();
 	}
 
@@ -112,7 +105,7 @@ void *producer_routine(void *data)
  * consumer_routine - this function is called when the consumer thread is created.
  *
  *       Params: data - a void pointer that should point to a boolean that indicates
- *                      the thread should exit. Doesn't work so don't worry about it
+ *                      the ID number of the consumer
  *
  *       Returns: always NULL
  *
@@ -130,27 +123,17 @@ void *consumer_routine(void *data)
 		printf("Consumer #%d wants to buy a Yoda...\n", consumerID);
 
 		// Semaphore check to make sure the buffer is not empty
+		// Consumers may get stuck here after all items have been produced, so they to be told to exit
 		empty->wait();
 
-		// Lock the mutex to safely access the buffer
+		// Lock the mutex to safely access the buffer and buffer variables 
 		pthread_mutex_lock(&buf_mutex);
 
 		// Grab the item from the buffer at the current index
 		int item = buffer[out];
 
-		// If the item is -1, it means the producer has signaled that no more items will be produced, so consumer should exit
-		if (item == -1)
-		{
-			// Signal for exit
-			pthread_mutex_unlock(&buf_mutex);
-			full->signal();
-			// Break out of loop
-			printf("Consumer #%d is told to go home by producer.\n", consumerID);
-			break;
-		}
-		// If we reach here, we have a valid item to consume
-		// Make sure the buffer slot is not empty
-		else if (item != 0)
+		// Make sure the buffer slot is not empty and we have not consumed all items yet
+		if (item != 0 && consumed < num_produce)
 		{
 			printf("   Consumer #%d bought Yoda #%d from shelf slot #%d.\n", consumerID, item, out + 1);
 			// Mark slot as empty

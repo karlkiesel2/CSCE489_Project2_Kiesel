@@ -75,7 +75,7 @@ void Semaphore::signal()
     // Resource is being returned, so increment the semaphore count
     count++;
 
-    // Signal waiting threads that the count has changed
+    // Signal waiting threads that the count has increased
     pthread_cond_signal(&cond);
 
     // Unlock the mutex after editing the count and signaling waiting threads
