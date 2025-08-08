@@ -94,7 +94,7 @@ void *producer_routine(void *data)
 	// After all items have been produced, we need to signal waiting consumers to exit
 	for (int i = 0; i < num_consumers; i++)
 	{
-		// // Send signal to consumers that we are done producing.
+		// Send signal to consumers that we are done producing.
 		empty->signal();
 	}
 
@@ -123,7 +123,7 @@ void *consumer_routine(void *data)
 		printf("Consumer #%d wants to buy a Yoda...\n", consumerID);
 
 		// Semaphore check to make sure the buffer is not empty
-		// Consumers may get stuck here after all items have been produced, so they to be told to exit
+		// Consumers may get stuck here after all items have been produced, so they need to be told to exit
 		empty->wait();
 
 		// Lock the mutex to safely access the buffer and buffer variables 
